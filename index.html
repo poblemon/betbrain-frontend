@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BetBrain IA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <script>
+        const { useState, useEffect, createElement: e } = React;
+        
+        function App() {
+            const [leagues] = useState([
+                { id: 2021, name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', key: 'epl' },
+                { id: 2014, name: 'LaLiga', flag: '🇪🇸', key: 'laliga' },
+                { id: 2019, name: 'Serie A', flag: '🇮🇹', key: 'seria' },
+                { id: 2002, name: 'Bundesliga', flag: '🇩🇪', key: 'bundesliga' }
+            ]);
+            const [selected, setSelected] = useState(null);
+            const [matches, setMatches] = useState([]);
+            const [loading, setLoading] = useState(false);
+            
+            async function loadMatches(league) {
+                setLoading(true);
+                try {
+                    const res = await fetch(`https://betbrain-backend.onrender.com/api/matches/${league.id}`);
+                    const data = await res.json();
+                    const processed = (data.matches || []).slice(0, 10).map(m => ({
+                        id: m.id,
+                        home: m.homeTeam.shortName || m.homeTeam.name,
+                        away: m.awayTeam.shortName || m.awayTeam.name,
+                        time: new Date(m.utcDate).toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'}),
+                        odds: m.odds || {home:2.0, draw:3.4, away:3.5}
+                    }));
+                    setMatches(processed);
+                } catch(err) {
+                    console.error(err);
+                } finally {
+                    setLoading(false);
+                }
+            }
+            
+            return e('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-6'},
+                e('div', {className: 'max-w-6xl mx-auto'},
+                    e('div', {className: 'text-center mb-8'},
+                        e('h1', {className: 'text-5xl font-bold mb-2'}, '⚽ BetBrain IA'),
+                        e('p', {className: 'text-gray-300'}, 'Análisis de apuestas con IA')
+                    ),
+                    e('div', {className: 'grid grid-cols-4 gap-4 mb-8'},
+                        leagues.map(l => 
+                            e('button', {
+                                key: l.key,
+                                onClick: () => { setSelected(l); loadMatches(l); },
+                                className: `p-4 rounded-xl ${selected?.key === l.key ? 'bg-purple-600' : 'bg-slate-800'} hover:scale-105 transition`
+                            }, e('div', {className: 'text-3xl mb-2'}, l.flag), e('div', {className: 'text-sm'}, l.name))
+                        )
+                    ),
+                    loading ? e('div', {className: 'text-center py-12'}, 'Cargando...') :
+                    matches.length === 0 ? e('div', {className: 'text-center py-12 text-gray-400'}, 'Selecciona una liga') :
+                    e('div', {className: 'grid md:grid-cols-2 gap-4'},
+                        matches.map(m =>
+                            e('div', {key: m.id, className: 'bg-slate-800/50 rounded-xl p-5 border border-purple-500/20'},
+                                e('div', {className: 'text-purple-400 text-sm mb-3'}, m.time),
+                                e('div', {className: 'space-y-2'},
+                                    e('div', {className: 'flex justify-between'},
+                                        e('span', {className: 'font-semibold'}, m.home),
+                                        e('span', {className: 'text-green-400 font-bold'}, m.odds.home)
+                                    ),
+                                    e('div', {className: 'flex justify-between text-gray-400'},
+                                        e('span', {}, 'Empate'),
+                                        e('span', {className: 'font-bold'}, m.odds.draw)
+                                    ),
+                                    e('div', {className: 'flex justify-between'},
+                                        e('span', {className: 'font-semibold'}, m.away),
+                                        e('span', {className: 'text-green-400 font-bold'}, m.odds.away)
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        }
+        
+        ReactDOM.createRoot(document.getElementById('root')).render(e(App));
+    </script>
+</body>
+</html>
+```
+
+#### **B. Publicar en Vercel:**
+
+1. Ve a **[vercel.com](https://vercel.com)**
+2. **Sign up** con GitHub
+3. Click en **"Add New"** → **"Project"**
+4. **"Import Git Repository"** → Crea nuevo repo
+5. O simplemente arrastra el `index.html` a Vercel
+
+**¡En 2 minutos tendrás tu URL pública!** ✅
+
+---
+
+### **SOLUCIÓN 2: Verificar que el backend esté activo** 🔍
+
+Primero verifica el backend:
+
+1. Abre esta URL en una pestaña nueva:
+```
+https://betbrain-backend.onrender.com/api/competitions
