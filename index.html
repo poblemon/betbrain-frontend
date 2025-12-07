@@ -40,21 +40,49 @@
                 
                 const userMsg = { role: 'user', content: input };
                 setMessages(prev => [...prev, userMsg]);
+                const currentInput = input;
                 setInput('');
                 setLoading(true);
                 
                 try {
+                    // Enviar partidos con estadísticas completas
+                    const enrichedMatches = matches.map(m => ({
+                        home: m.home,
+                        away: m.away,
+                        time: m.time,
+                        date: m.date,
+                        odds: m.odds,
+                        xGHome: m.probs?.xGHome || 'N/A',
+                        xGAway: m.probs?.xGAway || 'N/A',
+                        over25: m.probs?.over25 || 'N/A',
+                        btts: m.probs?.btts || 'N/A',
+                        homeProb: m.probs?.home?.toFixed(1) || 'N/A',
+                        awayProb: m.probs?.away?.toFixed(1) || 'N/A'
+                    }));
+                    
                     const res = await fetch(`${API}/chatbot`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: input, context: { matches } })
+                        body: JSON.stringify({ 
+                            message: currentInput,
+                            history: messages,
+                            matches: enrichedMatches
+                        })
                     });
+                    
+                    if (!res.ok) throw new Error('API Error');
+                    
                     const data = await res.json();
-                    setMessages(prev => [...prev, { role: 'assistant', content: data.response, data: data }]);
-                } catch (err) {
                     setMessages(prev => [...prev, { 
                         role: 'assistant', 
-                        content: 'Lo siento, tuve un problema al procesar tu mensaje. ¿Puedes intentar de nuevo?' 
+                        content: data.response,
+                        model: data.model 
+                    }]);
+                } catch (err) {
+                    console.error('Chatbot error:', err);
+                    setMessages(prev => [...prev, { 
+                        role: 'assistant', 
+                        content: '⚠️ Disculpa, estoy teniendo problemas para conectarme. Por favor intenta de nuevo en un momento.' 
                     }]);
                 }
                 setLoading(false);
@@ -167,15 +195,48 @@
                 setLoading(true);
                 setSelected(league);
                 try {
-                    const res = await fetch(`${API}/matches/${league.id}`);
-                    const data = await res.json();
-                    const processed = (data.matches || []).slice(0, 10).map(m => ({
-                        id: m.id,
-                        home: m.homeTeam.shortName || m.homeTeam.name,
-                        away: m.awayTeam.shortName || m.awayTeam.name,
-                        time: new Date(m.utcDate).toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'}),
-                        odds: m.odds || {home:2.1,draw:3.4,away:3.5}
-                    }));
+                    const [matchRes, standRes] = await Promise.all([
+                        fetch(`${API}/matches/${league.id}`),
+                        fetch(`${API}/standings/${league.id}`)
+                    ]);
+                    const matchData = await matchRes.json();
+                    const standData = await standRes.json();
+                    const standings = standData.standings?.[0]?.table || [];
+                    
+                    const processed = (matchData.matches || []).slice(0, 10).map(m => {
+                        const homeTeam = standings.find(t => t.team.id === m.homeTeam.id);
+                        const awayTeam = standings.find(t => t.team.id === m.awayTeam.id);
+                        
+                        // Calcular probabilidades
+                        const homeFormScore = homeTeam?.form?.split(',').filter(r => r === 'W').length / 5 || 0.5;
+                        const awayFormScore = awayTeam?.form?.split(',').filter(r => r === 'W').length / 5 || 0.5;
+                        const homeGoalsAvg = homeTeam ? homeTeam.goalsFor / homeTeam.playedGames : 1.5;
+                        const awayGoalsAvg = awayTeam ? awayTeam.goalsFor / awayTeam.playedGames : 1.5;
+                        
+                        const xGHome = (homeGoalsAvg * 1.2).toFixed(2);
+                        const xGAway = (awayGoalsAvg * 0.9).toFixed(2);
+                        const totalXG = parseFloat(xGHome) + parseFloat(xGAway);
+                        
+                        const homeWinProb = (homeFormScore * 0.4 + (homeGoalsAvg / (homeGoalsAvg + awayGoalsAvg)) * 0.6) * 100;
+                        const awayWinProb = (awayFormScore * 0.4 + (awayGoalsAvg / (homeGoalsAvg + awayGoalsAvg)) * 0.6) * 100;
+                        
+                        return {
+                            id: m.id,
+                            home: m.homeTeam.shortName || m.homeTeam.name,
+                            away: m.awayTeam.shortName || m.awayTeam.name,
+                            time: new Date(m.utcDate).toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'}),
+                            date: new Date(m.utcDate).toLocaleDateString('es'),
+                            odds: m.odds || {home:2.1,draw:3.4,away:3.5},
+                            probs: {
+                                home: homeWinProb,
+                                away: awayWinProb,
+                                xGHome,
+                                xGAway,
+                                over25: Math.round(totalXG > 2.5 ? 65 + (totalXG - 2.5) * 10 : 45),
+                                btts: Math.round(parseFloat(xGHome) > 0.8 && parseFloat(xGAway) > 0.8 ? 65 : 40)
+                            }
+                        };
+                    });
                     setMatches(processed);
                 } catch(err) {
                     console.error(err);
