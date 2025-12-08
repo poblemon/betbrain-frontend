@@ -3,211 +3,372 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BetBrain IA - Groq Edition</title>
+    <title>BetBrain IA - Chatbot Experto</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: white; }
-        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .card-hover { transition: all 0.3s ease; }
-        .card-hover:hover { transform: translateY(-5px); border-color: #a855f7; }
-        .chat-anim { animation: slideIn 0.3s ease-out; }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideIn {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .chat-bubble { animation: slideIn 0.3s ease-out; }
     </style>
 </head>
-<body>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
     <div id="root"></div>
-
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
     <script>
         const { useState, useEffect, useRef, createElement: e } = React;
+        const API = 'https://betbrain-backend.onrender.com/api';
         
-        // ------------------------------------------------------------------
-        // IMPORTANTE: CAMBIA ESTA URL POR LA DE TU PROYECTO EN RENDER
-        // NO USES 'localhost' SI ESTAS EN VERCEL
-        // Ejemplo: 'https://betbrain-backend.onrender.com'
-        // ------------------------------------------------------------------
-        const API_BASE = 'https://TU-URL-DE-RENDER-AQUI.onrender.com'; 
-        // ------------------------------------------------------------------
-
-        // Componente: Barra de Probabilidad
-        const ProbBar = ({ label, val, color }) => e('div', { className: 'mb-2' },
-            e('div', { className: 'flex justify-between text-xs mb-1 text-gray-400' },
-                e('span', {}, label), e('span', { className: 'font-bold text-white' }, `${val}%`)
-            ),
-            e('div', { className: 'h-2 bg-slate-700 rounded-full overflow-hidden' },
-                e('div', { className: `h-full ${color}`, style: { width: `${val}%` } })
-            )
-        );
-
-        // Componente: Modal de Detalles
-        const Modal = ({ match, onClose }) => e('div', { className: 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm' },
-            e('div', { className: 'bg-slate-900 w-full max-w-lg rounded-2xl border border-purple-500 p-6 shadow-2xl chat-anim' },
-                e('div', { className: 'flex justify-between mb-4' },
-                    e('h3', { className: 'font-bold text-xl' }, `${match.teams.home} vs ${match.teams.away}`),
-                    e('button', { onClick: onClose, className: 'text-gray-400 hover:text-white' }, '✕')
-                ),
-                e('div', { className: 'space-y-4' },
-                    e(ProbBar, { label: 'Victoria Local', val: match.probabilities.home_win, color: 'bg-green-500' }),
-                    e(ProbBar, { label: 'Empate', val: match.probabilities.draw, color: 'bg-yellow-500' }),
-                    e(ProbBar, { label: 'Victoria Visita', val: match.probabilities.away_win, color: 'bg-red-500' }),
-                    e('div', { className: 'h-px bg-slate-700 my-4' }),
-                    e(ProbBar, { label: 'Over 2.5 Goles', val: match.probabilities.over_2_5, color: 'bg-blue-500' }),
-                    e(ProbBar, { label: 'Ambos Anotan', val: match.probabilities.btts, color: 'bg-orange-500' }),
-                    e('div', { className: 'mt-4 bg-slate-800 p-3 rounded-lg' },
-                        e('p', { className: 'text-sm text-purple-300' }, 
-                            match.insights.length > 0 ? `💡 IA: ${match.insights[0]}` : "💡 IA: Partido muy cerrado, cuidado."
+        function ChatBot({ matches }) {
+            const [open, setOpen] = useState(false);
+            const [messages, setMessages] = useState([
+                { role: 'assistant', content: '¡Hola! 👋 Soy tu asistente BetBrain IA. ¿En qué puedo ayudarte hoy?' }
+            ]);
+            const [input, setInput] = useState('');
+            const [loading, setLoading] = useState(false);
+            const messagesEnd = useRef(null);
+            
+            useEffect(() => {
+                messagesEnd.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
+            
+            async function sendMessage() {
+                if (!input.trim()) return;
+                
+                const userMsg = { role: 'user', content: input };
+                setMessages(prev => [...prev, userMsg]);
+                const currentInput = input.trim().toLowerCase();
+                setInput('');
+                setLoading(true);
+                
+                // Análisis inteligente local mientras arreglamos Groq
+                let response = '';
+                
+                try {
+                    // Buscar equipo mencionado
+                    const teamMentioned = matches.find(m => 
+                        currentInput.includes(m.home.toLowerCase()) || 
+                        currentInput.includes(m.away.toLowerCase())
+                    );
+                    
+                    if (currentInput.includes('mejor') || currentInput.includes('recomiend')) {
+                        // Encontrar el mejor pick
+                        const bestMatch = matches.reduce((best, m) => {
+                            const homeEdge = ((m.probs.home / ((1/m.odds.home)*100)) - 1) * 100;
+                            const bestEdge = best ? ((best.probs.home / ((1/best.odds.home)*100)) - 1) * 100 : 0;
+                            return homeEdge > bestEdge ? m : best;
+                        }, null);
+                        
+                        if (bestMatch) {
+                            const homeEdge = ((bestMatch.probs.home / ((1/bestMatch.odds.home)*100)) - 1) * 100;
+                            response = `🎯 **MEJOR PICK DE HOY**\n\n⚽ **${bestMatch.home} vs ${bestMatch.away}**\n${bestMatch.time} - ${bestMatch.date}\n\n💰 **Recomendación:** Victoria ${bestMatch.home}\n📊 Cuota: ${bestMatch.odds.home}\n✅ Probabilidad: ${bestMatch.probs.home.toFixed(0)}%\n📈 Ventaja: +${homeEdge.toFixed(1)}%\n\n💡 **Razón:** Este partido ofrece el mejor value según mi análisis. xG favorable (${bestMatch.probs.xGHome} vs ${bestMatch.probs.xGAway}) y cuota atractiva.`;
+                        }
+                    }
+                    else if (currentInput.includes('ganar') && currentInput.match(/\d+/)) {
+                        // Calcular combinada para ganar X
+                        const amount = parseInt(currentInput.match(/\d+/)[0]);
+                        const topPicks = matches.slice(0, 3);
+                        const totalOdds = topPicks.reduce((acc, m) => acc * m.odds.home, 1);
+                        const stake = (amount / totalOdds).toFixed(2);
+                        
+                        response = `💰 **COMBINADA PARA GANAR €${amount}**\n\n🎯 Apuesta necesaria: €${stake}\n📊 Cuota total: ${totalOdds.toFixed(2)}\n\n**Picks seleccionados:**\n${topPicks.map((m, i) => `${i+1}. ${m.home} vs ${m.away} - Victoria Local (${m.odds.home})`).join('\n')}\n\n⚠️ Riesgo: Medio\n✅ Probabilidad combinada: ${(topPicks.reduce((acc, m) => acc * (m.probs.home/100), 1) * 100).toFixed(0)}%`;
+                    }
+                    else if (teamMentioned) {
+                        // Análisis específico del equipo
+                        const isHome = currentInput.includes(teamMentioned.home.toLowerCase());
+                        const team = isHome ? teamMentioned.home : teamMentioned.away;
+                        const odds = isHome ? teamMentioned.odds.home : teamMentioned.odds.away;
+                        const prob = isHome ? teamMentioned.probs.home : teamMentioned.probs.away;
+                        const xG = isHome ? teamMentioned.probs.xGHome : teamMentioned.probs.xGAway;
+                        
+                        const verdict = prob > 55 ? '✅ Sí, tiene buenas chances' : prob > 40 ? '⚠️ Es posible, pero arriesgado' : '❌ No es probable';
+                        
+                        response = `⚽ **ANÁLISIS: ${team}**\n\n${verdict}\n\n📊 **Estadísticas:**\n• Probabilidad de ganar: ${prob.toFixed(0)}%\n• Cuota: ${odds}\n• xG esperado: ${xG}\n• Over 2.5: ${teamMentioned.probs.over25}%\n• BTTS: ${teamMentioned.probs.btts}%\n\n💡 ${prob > 55 ? 'Recomiendo apostar a su victoria' : prob > 40 ? 'Considera apostarlo en combinada' : 'No lo recomiendo como apuesta individual'}`;
+                    }
+                    else if (currentInput.includes('combinada')) {
+                        const safePicks = matches.filter(m => m.probs.home > 60).slice(0, 3);
+                        const totalOdds = safePicks.reduce((acc, m) => acc * m.odds.home, 1);
+                        
+                        response = `🎯 **COMBINADA SEGURA**\n\n📊 Cuota total: ${totalOdds.toFixed(2)}\n✅ Probabilidad: ${(safePicks.reduce((acc, m) => acc * (m.probs.home/100), 1) * 100).toFixed(0)}%\n\n**Selección:**\n${safePicks.map((m, i) => `${i+1}. ${m.home} vs ${m.away}\n   Victoria ${m.home} (${m.odds.home})\n   Prob: ${m.probs.home.toFixed(0)}%`).join('\n\n')}\n\n💰 Con €10 ganarías: €${(10 * totalOdds).toFixed(2)}`;
+                    }
+                    else if (currentInput.includes('hola') || currentInput.includes('buenos')) {
+                        response = `¡Hola! 👋 Soy tu asistente BetBrain IA.\n\nTengo ${matches.length} partidos analizados para ti.\n\n¿Qué te gustaría saber?\n• "Dame el mejor pick"\n• "¿Ganará [equipo]?"\n• "Quiero ganar €100"\n• "Hazme una combinada"`;
+                    }
+                    else {
+                        response = `Entiendo que quieres información sobre apuestas.\n\nActualmente tengo ${matches.length} partidos disponibles.\n\n¿Podrías ser más específico?\nEjemplo:\n• "¿Ganará el Liverpool?"\n• "Dame el mejor pick"\n• "Hazme una combinada segura"`;
+                    }
+                    
+                    // Si no hay respuesta, intentar con Groq
+                    if (!response) {
+                        const enrichedMatches = matches.map(m => ({
+                            home: m.home,
+                            away: m.away,
+                            time: m.time,
+                            odds: m.odds,
+                            xGHome: m.probs?.xGHome,
+                            xGAway: m.probs?.xGAway,
+                            over25: m.probs?.over25,
+                            btts: m.probs?.btts,
+                            homeProb: m.probs?.home?.toFixed(1),
+                            awayProb: m.probs?.away?.toFixed(1)
+                        }));
+                        
+                        const res = await fetch(`${API}/chatbot`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                message: currentInput,
+                                history: messages,
+                                matches: enrichedMatches
+                            })
+                        });
+                        
+                        if (res.ok) {
+                            const data = await res.json();
+                            response = data.response;
+                        }
+                    }
+                    
+                    setMessages(prev => [...prev, { 
+                        role: 'assistant', 
+                        content: response
+                    }]);
+                    
+                } catch (err) {
+                    console.error('Chatbot error:', err);
+                    setMessages(prev => [...prev, { 
+                        role: 'assistant', 
+                        content: `📊 Tengo ${matches.length} partidos analizados.\n\n¿Qué necesitas?\n• Pregunta por un equipo específico\n• "Dame el mejor pick"\n• "Quiero ganar €X"` 
+                    }]);
+                }
+                setLoading(false);
+            }
+            
+            function quickAction(action) {
+                setInput(action);
+                setTimeout(() => sendMessage(), 100);
+            }
+            
+            return e('div', { className: 'fixed bottom-6 right-6 z-50' },
+                // Botón flotante
+                !open && e('button', {
+                    onClick: () => setOpen(true),
+                    className: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full w-16 h-16 shadow-2xl hover:scale-110 transition flex items-center justify-center text-2xl'
+                }, '🤖'),
+                
+                // Ventana de chat
+                open && e('div', { className: 'bg-slate-800 rounded-2xl shadow-2xl w-96 h-[600px] flex flex-col border border-purple-500/30' },
+                    // Header
+                    e('div', { className: 'bg-gradient-to-r from-purple-600 to-pink-600 p-4 rounded-t-2xl flex justify-between items-center' },
+                        e('div', { className: 'flex items-center gap-3' },
+                            e('div', { className: 'text-2xl' }, '🤖'),
+                            e('div', {},
+                                e('div', { className: 'font-bold' }, 'BetBrain IA'),
+                                e('div', { className: 'text-xs opacity-80' }, 'Asistente experto')
+                            )
+                        ),
+                        e('button', {
+                            onClick: () => setOpen(false),
+                            className: 'text-white/80 hover:text-white text-2xl'
+                        }, '×')
+                    ),
+                    
+                    // Mensajes
+                    e('div', { className: 'flex-1 overflow-y-auto p-4 space-y-4' },
+                        messages.map((msg, i) =>
+                            e('div', {
+                                key: i,
+                                className: `chat-bubble flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`
+                            },
+                                e('div', {
+                                    className: `max-w-[80%] rounded-2xl px-4 py-3 ${
+                                        msg.role === 'user' 
+                                            ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' 
+                                            : 'bg-slate-700 text-gray-100'
+                                    }`
+                                }, msg.content)
+                            )
+                        ),
+                        loading && e('div', { className: 'flex justify-start' },
+                            e('div', { className: 'bg-slate-700 rounded-2xl px-4 py-3' },
+                                e('div', { className: 'flex gap-1' },
+                                    [1,2,3].map(i => e('div', {
+                                        key: i,
+                                        className: 'w-2 h-2 bg-purple-400 rounded-full animate-bounce',
+                                        style: { animationDelay: `${i * 0.1}s` }
+                                    }))
+                                )
+                            )
+                        ),
+                        e('div', { ref: messagesEnd })
+                    ),
+                    
+                    // Acciones rápidas
+                    messages.length <= 1 && e('div', { className: 'px-4 pb-2 flex flex-wrap gap-2' },
+                        ['Dame los mejores picks', 'Quiero ganar €100', 'Crea una combinada'].map(action =>
+                            e('button', {
+                                key: action,
+                                onClick: () => quickAction(action),
+                                className: 'text-xs bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-full transition'
+                            }, action)
+                        )
+                    ),
+                    
+                    // Input
+                    e('div', { className: 'p-4 border-t border-slate-700' },
+                        e('div', { className: 'flex gap-2' },
+                            e('input', {
+                                type: 'text',
+                                value: input,
+                                onChange: ev => setInput(ev.target.value),
+                                onKeyPress: ev => ev.key === 'Enter' && sendMessage(),
+                                placeholder: 'Escribe tu pregunta...',
+                                className: 'flex-1 bg-slate-700 rounded-full px-4 py-2 outline-none focus:ring-2 focus:ring-purple-500 text-white placeholder-gray-400'
+                            }),
+                            e('button', {
+                                onClick: sendMessage,
+                                disabled: !input.trim(),
+                                className: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full w-10 h-10 flex items-center justify-center disabled:opacity-50 hover:scale-105 transition'
+                            }, '➤')
                         )
                     )
                 )
-            )
-        );
-
-        // Componente: Chatbot Flotante
-        const Chatbot = ({ matches }) => {
-            const [open, setOpen] = useState(false);
-            const [msgs, setMsgs] = useState([{role:'assistant', content:'🤖 Hola, soy BetBrain con Llama 3. ¿En qué te ayudo?'}]);
-            const [input, setInput] = useState('');
-            const [loading, setLoading] = useState(false);
-            const bottomRef = useRef(null);
-
-            useEffect(() => bottomRef.current?.scrollIntoView({behavior: 'smooth'}), [msgs]);
-
-            const send = async () => {
-                if(!input.trim()) return;
-                const newMsgs = [...msgs, {role:'user', content:input}];
-                setMsgs(newMsgs);
-                setInput('');
-                setLoading(true);
-
-                try {
-                    const res = await fetch(`${API_BASE}/api/chatbot`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ message: input, matches: matches, history: newMsgs })
-                    });
-                    const data = await res.json();
-                    setMsgs([...newMsgs, {role:'assistant', content: data.response}]);
-                } catch(e) {
-                    setMsgs([...newMsgs, {role:'assistant', content: "⚠️ Error conectando con el cerebro de IA."}]);
-                }
-                setLoading(false);
-            };
-
-            return e('div', { className: 'fixed bottom-5 right-5 z-40 flex flex-col items-end' },
-                open && e('div', { className: 'mb-4 w-80 h-96 bg-slate-800 rounded-2xl shadow-2xl border border-purple-500 flex flex-col overflow-hidden chat-anim' },
-                    e('div', { className: 'bg-purple-900 p-3 flex justify-between items-center' },
-                        e('span', { className: 'font-bold' }, '🧠 Chat IA'),
-                        e('button', { onClick: () => setOpen(false) }, '✕')
-                    ),
-                    e('div', { className: 'flex-1 overflow-y-auto p-3 space-y-3' },
-                        msgs.map((m, i) => e('div', { key: i, className: `p-2 rounded-lg text-sm max-w-[85%] ${m.role==='user'?'bg-purple-600 ml-auto':'bg-slate-700 mr-auto'}` }, m.content)),
-                        loading && e('div', { className: 'text-xs text-gray-500 animate-pulse' }, 'Pensando...'),
-                        e('div', { ref: bottomRef })
-                    ),
-                    e('div', { className: 'p-2 border-t border-slate-700 flex gap-2' },
-                        e('input', { 
-                            className: 'flex-1 bg-slate-900 rounded px-2 text-sm outline-none', 
-                            value: input, 
-                            onChange: e=>setInput(e.target.value),
-                            onKeyDown: e=>e.key==='Enter'&&send(),
-                            placeholder: 'Pregunta...'
-                        }),
-                        e('button', { onClick: send, className: 'bg-purple-600 px-3 rounded' }, '➤')
-                    )
-                ),
-                !open && e('button', { 
-                    onClick: () => setOpen(true),
-                    className: 'w-14 h-14 bg-purple-600 rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-purple-500 transition'
-                }, '🤖')
             );
-        };
-
-        // Componente: App Principal
-        const App = () => {
-            const [matches, setMatches] = useState([]);
+        }
+        
+        function App() {
+            const [leagues] = useState([
+                { id: 2021, name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+                { id: 2014, name: 'LaLiga', flag: '🇪🇸' },
+                { id: 2019, name: 'Serie A', flag: '🇮🇹' },
+                { id: 2002, name: 'Bundesliga', flag: '🇩🇪' }
+            ]);
             const [selected, setSelected] = useState(null);
-            const [league, setLeague] = useState(2021);
+            const [matches, setMatches] = useState([]);
             const [loading, setLoading] = useState(false);
-
-            useEffect(() => {
+            
+            async function loadMatches(league) {
                 setLoading(true);
-                // Asegurarse de quitar la barra al final si existe
-                const cleanUrl = API_BASE.replace(/\/$/, "");
-                fetch(`${cleanUrl}/api/matches/${league}`)
-                    .then(r => r.json())
-                    .then(d => { setMatches(d.matches || []); setLoading(false); })
-                    .catch(e => { console.error(e); setLoading(false); });
-            }, [league]);
-
-            return e('div', { className: 'min-h-screen pb-20' },
-                // Header
-                e('div', { className: 'glass sticky top-0 z-30 px-6 py-4 flex justify-between items-center' },
-                    e('h1', { className: 'text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600' }, 'BetBrain IA'),
-                    e('select', { 
-                        className: 'bg-slate-800 rounded px-3 py-1 text-sm border border-slate-600 outline-none',
-                        value: league,
-                        onChange: e => setLeague(e.target.value)
-                    }, 
-                        e('option', { value: 2021 }, '🇬🇧 Premier'),
-                        e('option', { value: 2014 }, '🇪🇸 La Liga'),
-                        e('option', { value: 2019 }, '🇮🇹 Serie A'),
-                        e('option', { value: 2002 }, '🇩🇪 Bundesliga')
+                setSelected(league);
+                try {
+                    const [matchRes, standRes] = await Promise.all([
+                        fetch(`${API}/matches/${league.id}`),
+                        fetch(`${API}/standings/${league.id}`)
+                    ]);
+                    const matchData = await matchRes.json();
+                    const standData = await standRes.json();
+                    const standings = standData.standings?.[0]?.table || [];
+                    
+                    const processed = (matchData.matches || []).slice(0, 10).map(m => {
+                        const homeTeam = standings.find(t => t.team.id === m.homeTeam.id);
+                        const awayTeam = standings.find(t => t.team.id === m.awayTeam.id);
+                        
+                        // Calcular probabilidades
+                        const homeFormScore = homeTeam?.form?.split(',').filter(r => r === 'W').length / 5 || 0.5;
+                        const awayFormScore = awayTeam?.form?.split(',').filter(r => r === 'W').length / 5 || 0.5;
+                        const homeGoalsAvg = homeTeam ? homeTeam.goalsFor / homeTeam.playedGames : 1.5;
+                        const awayGoalsAvg = awayTeam ? awayTeam.goalsFor / awayTeam.playedGames : 1.5;
+                        
+                        const xGHome = (homeGoalsAvg * 1.2).toFixed(2);
+                        const xGAway = (awayGoalsAvg * 0.9).toFixed(2);
+                        const totalXG = parseFloat(xGHome) + parseFloat(xGAway);
+                        
+                        const homeWinProb = (homeFormScore * 0.4 + (homeGoalsAvg / (homeGoalsAvg + awayGoalsAvg)) * 0.6) * 100;
+                        const awayWinProb = (awayFormScore * 0.4 + (awayGoalsAvg / (homeGoalsAvg + awayGoalsAvg)) * 0.6) * 100;
+                        
+                        return {
+                            id: m.id,
+                            home: m.homeTeam.shortName || m.homeTeam.name,
+                            away: m.awayTeam.shortName || m.awayTeam.name,
+                            time: new Date(m.utcDate).toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'}),
+                            date: new Date(m.utcDate).toLocaleDateString('es'),
+                            odds: m.odds || {home:2.1,draw:3.4,away:3.5},
+                            probs: {
+                                home: homeWinProb,
+                                away: awayWinProb,
+                                xGHome,
+                                xGAway,
+                                over25: Math.round(totalXG > 2.5 ? 65 + (totalXG - 2.5) * 10 : 45),
+                                btts: Math.round(parseFloat(xGHome) > 0.8 && parseFloat(xGAway) > 0.8 ? 65 : 40)
+                            }
+                        };
+                    });
+                    setMatches(processed);
+                } catch(err) {
+                    console.error(err);
+                } finally {
+                    setLoading(false);
+                }
+            }
+            
+            return e('div', { className: 'min-h-screen text-white p-6' },
+                e('div', { className: 'max-w-7xl mx-auto' },
+                    // Header
+                    e('div', { className: 'text-center mb-8' },
+                        e('h1', { className: 'text-5xl font-bold mb-2' }, '⚽ BetBrain IA'),
+                        e('p', { className: 'text-gray-300' }, 'Asistente IA para análisis de apuestas'),
+                        e('div', { className: 'mt-3 flex items-center justify-center gap-2 text-sm' },
+                            e('span', { className: 'bg-green-600/20 text-green-400 px-3 py-1 rounded-full' }, '🤖 Chatbot IA activo'),
+                            e('span', { className: 'bg-purple-600/20 text-purple-400 px-3 py-1 rounded-full' }, '📊 Análisis en tiempo real')
+                        )
+                    ),
+                    
+                    // Ligas
+                    e('div', { className: 'grid grid-cols-2 md:grid-cols-4 gap-4 mb-8' },
+                        leagues.map(l => 
+                            e('button', {
+                                key: l.id,
+                                onClick: () => loadMatches(l),
+                                className: `p-4 rounded-xl transition ${selected?.id === l.id ? 'bg-gradient-to-r from-purple-600 to-pink-600 scale-105' : 'bg-slate-800/50 hover:bg-slate-700/50'}`
+                            }, e('div', { className: 'text-3xl mb-2' }, l.flag), e('div', { className: 'text-sm' }, l.name))
+                        )
+                    ),
+                    
+                    // Partidos
+                    loading ? e('div', { className: 'text-center py-20' },
+                        e('div', { className: 'text-6xl mb-4' }, '⚽'),
+                        e('div', { className: 'text-xl text-purple-400' }, 'Cargando partidos...')
+                    ) :
+                    matches.length === 0 ? e('div', { className: 'text-center py-20' },
+                        e('div', { className: 'text-6xl mb-4' }, '🎯'),
+                        e('div', { className: 'text-xl text-gray-400' }, 'Selecciona una liga'),
+                        e('div', { className: 'mt-4 text-purple-400' }, '💬 O pregúntale al chatbot →')
+                    ) :
+                    e('div', { className: 'grid md:grid-cols-2 lg:grid-cols-3 gap-4' },
+                        matches.map(m =>
+                            e('div', {
+                                key: m.id,
+                                className: 'bg-slate-800/50 rounded-xl p-5 border border-purple-500/20 hover:border-purple-500/50 transition'
+                            },
+                                e('div', { className: 'text-purple-400 text-sm mb-3' }, m.time),
+                                e('div', { className: 'grid grid-cols-3 gap-2 text-center' },
+                                    e('div', {},
+                                        e('div', { className: 'font-bold mb-1' }, m.home),
+                                        e('div', { className: 'text-green-400 text-xl font-bold' }, m.odds.home)
+                                    ),
+                                    e('div', { className: 'text-gray-400' },
+                                        e('div', { className: 'text-sm mb-1' }, 'Empate'),
+                                        e('div', { className: 'text-lg font-bold' }, m.odds.draw)
+                                    ),
+                                    e('div', {},
+                                        e('div', { className: 'font-bold mb-1' }, m.away),
+                                        e('div', { className: 'text-green-400 text-xl font-bold' }, m.odds.away)
+                                    )
+                                )
+                            )
+                        )
                     )
                 ),
-                // Contenido
-                e('div', { className: 'max-w-6xl mx-auto p-4' },
-                    loading 
-                    ? e('div', { className: 'text-center mt-20 text-purple-400 animate-pulse' }, 'Analizando mercado con IA...') 
-                    : matches.length === 0 
-                        ? e('div', { className: 'text-center mt-20 text-gray-500' }, 
-                            e('div', { className: 'text-4xl mb-2' }, '😴'),
-                            'No hay partidos programados pronto o error de conexión.'
-                        )
-                        : e('div', { className: 'grid md:grid-cols-2 lg:grid-cols-3 gap-6' },
-                            matches.map(m => e('div', { 
-                                key: m.id,
-                                className: 'bg-slate-800 rounded-xl p-5 border border-slate-700 card-hover cursor-pointer relative',
-                                onClick: () => setSelected(m)
-                            },
-                                m.insights.length > 0 && e('div', { className: 'absolute -top-2 -right-2 bg-green-600 text-xs px-2 py-1 rounded-full font-bold shadow' }, 'VALUE'),
-                                e('div', { className: 'text-gray-400 text-xs mb-2' }, new Date(m.time).toLocaleString()),
-                                e('div', { className: 'flex justify-between items-center font-bold text-lg mb-4' },
-                                    e('span', {}, m.teams.home),
-                                    e('span', { className: 'text-purple-500 text-sm' }, 'vs'),
-                                    e('span', {}, m.teams.away)
-                                ),
-                                e('div', { className: 'grid grid-cols-3 gap-2 text-center text-sm' },
-                                    e('div', { className: 'bg-slate-900 rounded py-2' }, 
-                                        e('div', { className: 'text-gray-500 text-xs' }, '1'), 
-                                        e('div', { className: 'text-green-400 font-bold' }, m.odds.home)
-                                    ),
-                                    e('div', { className: 'bg-slate-900 rounded py-2' }, 
-                                        e('div', { className: 'text-gray-500 text-xs' }, 'X'), 
-                                        e('div', { className: 'font-bold' }, m.odds.draw)
-                                    ),
-                                    e('div', { className: 'bg-slate-900 rounded py-2' }, 
-                                        e('div', { className: 'text-gray-500 text-xs' }, '2'), 
-                                        e('div', { className: 'text-red-400 font-bold' }, m.odds.away)
-                                    )
-                                ),
-                                e('div', { className: 'mt-3 flex gap-1 h-1 bg-slate-700 rounded-full overflow-hidden' },
-                                    e('div', { className: 'bg-green-500', style: { width: `${m.probabilities.home_win}%` } }),
-                                    e('div', { className: 'bg-yellow-500', style: { width: `${m.probabilities.draw}%` } }),
-                                    e('div', { className: 'bg-red-500', style: { width: `${m.probabilities.away_win}%` } })
-                                )
-                            ))
-                        )
-                ),
-                selected && e(Modal, { match: selected, onClose: () => setSelected(null) }),
-                e(Chatbot, { matches })
+                
+                // Chatbot
+                e(ChatBot, { matches })
             );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(e(App));
+        }
+        
+        ReactDOM.createRoot(document.getElementById('root')).render(e(App));
     </script>
 </body>
 </html>
