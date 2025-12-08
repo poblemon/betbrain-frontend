@@ -3,254 +3,350 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Análisis Completo - BetBrain IA</title>
+    <title>BetBrain IA - Advanced Stats</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: white; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+        .stat-row:nth-child(even) { background-color: rgba(255,255,255,0.02); }
+        .animate-enter { animation: enter 0.4s ease-out; }
+        @keyframes enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Barra de progreso personalizada */
+        .progress-bar { transition: width 1s ease-in-out; }
+    </style>
 </head>
-<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
+<body>
     <div id="root"></div>
+
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
+
     <script>
-        const { useState, useEffect, createElement: e } = React;
-        const API = 'https://betbrain-backend.onrender.com/api';
-        
-        // Simular datos (en producción vendrían del backend)
-        const mockAnalysis = {
-            match: {
-                home: "Barcelona",
-                away: "Osasuna",
-                date: "2024-12-08 15:00",
-                venue: "Camp Nou, Barcelona",
-                referee: "José María Sánchez",
-                competition: "LaLiga"
-            },
-            statistics: {
-                home: {
-                    avg_goals_scored: 2.4,
-                    avg_goals_conceded: 0.8,
-                    avg_corners: 7.2,
-                    avg_yellow_cards: 2.1,
-                    form: ["W", "W", "W", "D", "W"],
-                    win_rate: 75,
-                    over_25_percentage: 70,
-                    btts_percentage: 45,
-                    clean_sheet_rate: 55,
-                    xg: 2.5,
-                    xga: 0.9
-                },
-                away: {
-                    avg_goals_scored: 1.2,
-                    avg_goals_conceded: 1.8,
-                    avg_corners: 4.5,
-                    avg_yellow_cards: 2.8,
-                    form: ["L", "D", "L", "W", "L"],
-                    win_rate: 30,
-                    over_25_percentage: 55,
-                    btts_percentage: 60,
-                    clean_sheet_rate: 20,
-                    xg: 1.3,
-                    xga: 1.9
-                }
-            },
-            predictions: {
-                result_1x2: { home_win: 72, draw: 18, away_win: 10 },
-                goals: {
-                    expected_home: 2.2,
-                    expected_away: 0.9,
-                    over_25: 68,
-                    btts: 48
-                },
-                corners: { expected_total: 10.5, over_85: 75, over_95: 65 },
-                cards: { expected_yellow: 4.5, over_35_cards: 70 }
-            }
+        const { useState, useEffect, useRef, createElement: e } = React;
+
+        // ------------------------------------------------------------------
+        // 👇 PON AQUÍ TU URL DE RENDER (Sin la barra al final)
+        const API_BASE = 'https://betbrain-backend.onrender.com';
+        // ------------------------------------------------------------------
+
+        // --- COMPONENTES UI ---
+
+        const Badge = ({ type }) => {
+            const colors = {
+                'W': 'bg-green-500 text-green-950',
+                'D': 'bg-gray-400 text-gray-900',
+                'L': 'bg-red-500 text-red-950'
+            };
+            return e('span', { className: `text-xs font-bold px-2 py-0.5 rounded ${colors[type] || 'bg-gray-600'} mx-0.5` }, type);
         };
-        
-        function MatchAnalysis() {
-            const [activeTab, setActiveTab] = useState('overview');
-            const [analysis, setAnalysis] = useState(mockAnalysis);
-            
-            const tabs = [
-                { id: 'overview', name: '📊 General', icon: '📊' },
-                { id: 'stats', name: '📈 Estadísticas', icon: '📈' },
-                { id: 'corners', name: '🚩 Corners', icon: '🚩' },
-                { id: 'cards', name: '🟨 Tarjetas', icon: '🟨' },
-                { id: 'players', name: '⚽ Jugadores', icon: '⚽' },
-                { id: 'predictions', name: '🎯 Predicciones', icon: '🎯' }
-            ];
-            
-            return e('div', { className: 'min-h-screen p-6' },
-                e('div', { className: 'max-w-7xl mx-auto' },
-                    // Header
-                    e('div', { className: 'bg-slate-800/50 rounded-2xl p-6 mb-6 border border-purple-500/30' },
-                        e('div', { className: 'flex items-center justify-between mb-4' },
-                            e('button', {
-                                onClick: () => window.history.back(),
-                                className: 'text-purple-400 hover:text-purple-300'
-                            }, '← Volver'),
-                            e('div', { className: 'text-sm text-gray-400' }, analysis.match.competition)
-                        ),
-                        e('div', { className: 'grid md:grid-cols-3 gap-4 items-center text-center' },
-                            e('div', {},
-                                e('div', { className: 'text-3xl font-bold mb-2' }, analysis.match.home),
-                                e('div', { className: 'flex justify-center gap-1' },
-                                    analysis.statistics.home.form.map((r, i) =>
-                                        e('span', {
-                                            key: i,
-                                            className: `w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
-                                                r === 'W' ? 'bg-green-600' : r === 'D' ? 'bg-yellow-600' : 'bg-red-600'
-                                            }`
-                                        }, r)
-                                    )
-                                )
+
+        const StatRow = ({ label, homeVal, awayVal, isPercent }) => {
+            const h = parseFloat(homeVal);
+            const a = parseFloat(awayVal);
+            const total = h + a || 1;
+            const hPerc = (h / total) * 100;
+            const aPerc = (a / total) * 100;
+
+            return e('div', { className: 'grid grid-cols-3 gap-4 py-3 border-b border-slate-700/50 items-center stat-row px-4' },
+                e('div', { className: 'text-right font-bold text-sm' }, isPercent ? `${homeVal}%` : homeVal),
+                e('div', { className: 'text-center text-xs text-gray-400 uppercase tracking-wider' }, label),
+                e('div', { className: 'text-left font-bold text-sm' }, isPercent ? `${awayVal}%` : awayVal)
+            );
+        };
+
+        const PredictionCard = ({ title, value, subtext, color }) => e('div', { className: 'bg-slate-800 p-4 rounded-xl border border-slate-700' },
+            e('div', { className: 'text-gray-400 text-xs uppercase mb-1' }, title),
+            e('div', { className: `text-2xl font-bold ${color}` }, value),
+            e('div', { className: 'text-xs text-gray-500 mt-1' }, subtext)
+        );
+
+        // --- VISTAS ---
+
+        const MatchDetail = ({ matchId, onBack, onUpdateContext }) => {
+            const [data, setData] = useState(null);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                fetch(`${API_BASE}/api/match/${matchId}/detailed`)
+                    .then(r => r.json())
+                    .then(d => {
+                        setData(d);
+                        onUpdateContext(d); // Enviar datos al chatbot
+                        setLoading(false);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        setLoading(false);
+                    });
+            }, [matchId]);
+
+            if (loading) return e('div', { className: 'min-h-screen flex items-center justify-center' }, 
+                e('div', { className: 'animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500' })
+            );
+
+            if (!data) return e('div', { className: 'p-8 text-center' }, 'Error cargando datos');
+
+            const { match, statistics, predictions } = data;
+
+            return e('div', { className: 'max-w-4xl mx-auto p-4 animate-enter pb-24' },
+                // Header "Flashscore style"
+                e('button', { onClick: onBack, className: 'mb-4 flex items-center text-gray-400 hover:text-white transition' }, '← Volver'),
+                
+                e('div', { className: 'bg-slate-800 rounded-2xl overflow-hidden shadow-2xl border border-slate-700 mb-6' },
+                    e('div', { className: 'bg-gradient-to-r from-slate-900 via-purple-900 to-slate-900 p-6 text-center relative' },
+                        e('div', { className: 'text-xs text-purple-300 uppercase tracking-widest mb-2' }, match.competition),
+                        e('div', { className: 'flex justify-between items-center max-w-lg mx-auto' },
+                            e('div', { className: 'text-center flex-1' },
+                                e('h2', { className: 'text-2xl font-bold mb-2' }, match.home),
+                                e('div', {}, statistics.home.form.map((r, i) => e(Badge, { key: i, type: r })))
                             ),
-                            e('div', { className: 'text-4xl font-bold text-purple-400' }, 'VS'),
-                            e('div', {},
-                                e('div', { className: 'text-3xl font-bold mb-2' }, analysis.match.away),
-                                e('div', { className: 'flex justify-center gap-1' },
-                                    analysis.statistics.away.form.map((r, i) =>
-                                        e('span', {
-                                            key: i,
-                                            className: `w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
-                                                r === 'W' ? 'bg-green-600' : r === 'D' ? 'bg-yellow-600' : 'bg-red-600'
-                                            }`
-                                        }, r)
-                                    )
-                                )
+                            e('div', { className: 'px-4' },
+                                e('div', { className: 'text-4xl font-black text-white/90' }, 'VS'),
+                                e('div', { className: 'text-xs text-gray-400 mt-1' }, new Date(match.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}))
+                            ),
+                            e('div', { className: 'text-center flex-1' },
+                                e('h2', { className: 'text-2xl font-bold mb-2' }, match.away),
+                                e('div', {}, statistics.away.form.map((r, i) => e(Badge, { key: i, type: r })))
                             )
-                        ),
-                        e('div', { className: 'mt-6 grid grid-cols-2 gap-4 text-sm text-gray-300' },
-                            e('div', {}, '📅 ', analysis.match.date),
-                            e('div', {}, '🏟️ ', analysis.match.venue),
-                            e('div', {}, '👨‍⚖️ ', analysis.match.referee),
-                            e('div', {}, '🏆 ', analysis.match.competition)
                         )
                     ),
                     
-                    // Tabs
-                    e('div', { className: 'flex gap-2 mb-6 overflow-x-auto' },
-                        tabs.map(tab =>
+                    // Barra de Probabilidad 1X2
+                    e('div', { className: 'p-6 border-b border-slate-700' },
+                        e('h3', { className: 'text-sm font-bold text-gray-400 mb-3 flex items-center gap-2' }, '🎯 Probabilidad de Victoria (IA)'),
+                        e('div', { className: 'h-4 bg-slate-900 rounded-full overflow-hidden flex' },
+                            e('div', { className: 'bg-green-500 h-full progress-bar', style: { width: `${predictions.result_1x2.home_win}%` } }),
+                            e('div', { className: 'bg-yellow-500 h-full progress-bar', style: { width: `${predictions.result_1x2.draw}%` } }),
+                            e('div', { className: 'bg-blue-500 h-full progress-bar', style: { width: `${predictions.result_1x2.away_win}%` } })
+                        ),
+                        e('div', { className: 'flex justify-between text-xs mt-2 font-bold' },
+                            e('span', { className: 'text-green-400' }, `${predictions.result_1x2.home_win}% Local`),
+                            e('span', { className: 'text-yellow-400' }, `${predictions.result_1x2.draw}% Empate`),
+                            e('span', { className: 'text-blue-400' }, `${predictions.result_1x2.away_win}% Visita`)
+                        )
+                    ),
+
+                    // Grid de Stats Comparativas
+                    e('div', { className: 'bg-slate-900/50' },
+                        e(StatRow, { label: 'Goles / Partido', homeVal: statistics.home.avg_goals_scored, awayVal: statistics.away.avg_goals_scored }),
+                        e(StatRow, { label: 'xG (Esperado)', homeVal: statistics.home.xg, awayVal: statistics.away.xg }),
+                        e(StatRow, { label: 'Corners Promedio', homeVal: statistics.home.avg_corners, awayVal: statistics.away.avg_corners }),
+                        e(StatRow, { label: 'Tarjetas Promedio', homeVal: statistics.home.avg_yellow_cards, awayVal: statistics.away.avg_yellow_cards }),
+                        e(StatRow, { label: 'Probabilidad BTTS', homeVal: predictions.goals.btts, awayVal: predictions.goals.btts, isPercent: true }),
+                        e(StatRow, { label: 'Over 2.5 Goles', homeVal: predictions.goals.over_25, awayVal: predictions.goals.over_25, isPercent: true })
+                    )
+                ),
+
+                // Tarjetas de Predicción IA
+                e('h3', { className: 'text-xl font-bold mb-4 flex items-center gap-2' }, '🤖 Predicciones Inteligentes'),
+                e('div', { className: 'grid md:grid-cols-3 gap-4' },
+                    e(PredictionCard, { 
+                        title: 'Goles Esperados', 
+                        value: predictions.goals.total_expected, 
+                        subtext: predictions.goals.over_25 > 60 ? '🔥 Alta probabilidad de goles' : '🛡️ Partido cerrado',
+                        color: 'text-blue-400' 
+                    }),
+                    e(PredictionCard, { 
+                        title: 'Corners Totales', 
+                        value: predictions.corners.expected_total, 
+                        subtext: predictions.corners.expected_total > 9.5 ? '🚩 Juego por bandas' : '📉 Juego centralizado',
+                        color: 'text-purple-400' 
+                    }),
+                    e(PredictionCard, { 
+                        title: 'Riesgo Tarjetas', 
+                        value: predictions.cards.expected_yellow, 
+                        subtext: predictions.cards.expected_yellow > 4.5 ? '🟨 Partido muy trabado' : '🤝 Juego limpio',
+                        color: 'text-yellow-400' 
+                    })
+                )
+            );
+        };
+
+        const MatchList = ({ onSelectMatch }) => {
+            const [matches, setMatches] = useState([]);
+            const [league, setLeague] = useState(2021);
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                setLoading(true);
+                // Usamos el endpoint de listado que debe existir en tu backend
+                // Si tu backend nuevo no tiene listado, hay que agregarlo, pero asumiremos que el anterior sigue
+                fetch(`${API_BASE}/api/matches/${league}`)
+                    .then(r => r.json())
+                    .then(d => {
+                        setMatches(d.matches || []);
+                        setLoading(false);
+                    })
+                    .catch(e => {
+                        console.error(e);
+                        setLoading(false);
+                    });
+            }, [league]);
+
+            const leagues = [
+                { id: 2021, name: '🇬🇧 Premier League' },
+                { id: 2014, name: '🇪🇸 La Liga' },
+                { id: 2019, name: '🇮🇹 Serie A' },
+                { id: 2002, name: '🇩🇪 Bundesliga' },
+                { id: 2015, name: '🇫🇷 Ligue 1' }
+            ];
+
+            return e('div', { className: 'max-w-5xl mx-auto p-4 animate-enter' },
+                e('div', { className: 'flex flex-col md:flex-row justify-between items-center mb-8 gap-4' },
+                    e('h1', { className: 'text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500' }, 'BetBrain IA 🧠'),
+                    e('div', { className: 'flex gap-2 overflow-x-auto pb-2 w-full md:w-auto' },
+                        leagues.map(l => 
                             e('button', {
-                                key: tab.id,
-                                onClick: () => setActiveTab(tab.id),
-                                className: `px-6 py-3 rounded-xl font-medium transition whitespace-nowrap ${
-                                    activeTab === tab.id
-                                        ? 'bg-gradient-to-r from-purple-600 to-pink-600'
-                                        : 'bg-slate-800/50 hover:bg-slate-700/50'
-                                }`
-                            }, tab.icon, ' ', tab.name)
+                                key: l.id,
+                                onClick: () => setLeague(l.id),
+                                className: `px-4 py-2 rounded-full whitespace-nowrap text-sm font-bold transition ${league === l.id ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30' : 'bg-slate-800 text-gray-400 hover:bg-slate-700'}`
+                            }, l.name)
                         )
-                    ),
-                    
-                    // Content
-                    activeTab === 'overview' && e('div', { className: 'space-y-6' },
-                        // Probabilidades principales
-                        e('div', { className: 'bg-slate-800/50 rounded-xl p-6 border border-purple-500/20' },
-                            e('h3', { className: 'text-2xl font-bold mb-4' }, '🎯 Resultado Probable'),
-                            e('div', { className: 'grid grid-cols-3 gap-4' },
-                                [
-                                    { label: analysis.match.home, prob: analysis.predictions.result_1x2.home_win, color: 'green' },
-                                    { label: 'Empate', prob: analysis.predictions.result_1x2.draw, color: 'yellow' },
-                                    { label: analysis.match.away, prob: analysis.predictions.result_1x2.away_win, color: 'blue' }
-                                ].map((item, i) =>
-                                    e('div', {
-                                        key: i,
-                                        className: 'bg-slate-700/30 rounded-xl p-4 text-center'
-                                    },
-                                        e('div', { className: 'text-sm text-gray-400 mb-2' }, item.label),
-                                        e('div', { className: `text-4xl font-bold text-${item.color}-400` }, item.prob, '%'),
-                                        e('div', { className: 'w-full bg-slate-600 rounded-full h-2 mt-3' },
-                                            e('div', {
-                                                className: `bg-${item.color}-500 h-2 rounded-full transition-all`,
-                                                style: { width: `${item.prob}%` }
-                                            })
-                                        )
+                    )
+                ),
+
+                loading 
+                    ? e('div', { className: 'text-center py-20' }, e('div', { className: 'animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto' })) 
+                    : e('div', { className: 'grid md:grid-cols-2 lg:grid-cols-3 gap-6' },
+                        matches.length === 0 ? e('div', { className: 'col-span-full text-center text-gray-500' }, 'No hay partidos programados pronto.') :
+                        matches.map(m => 
+                            e('div', { 
+                                key: m.id, 
+                                onClick: () => onSelectMatch(m.id),
+                                className: 'bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-purple-500 transition cursor-pointer group hover:shadow-2xl hover:shadow-purple-900/20' 
+                            },
+                                e('div', { className: 'flex justify-between text-xs text-gray-400 mb-4' },
+                                    e('span', {}, new Date(m.time).toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit'})),
+                                    m.insights && m.insights.length > 0 && e('span', { className: 'text-green-400 font-bold' }, '★ Value Bet')
+                                ),
+                                e('div', { className: 'flex justify-between items-center mb-4' },
+                                    e('div', { className: 'font-bold text-lg' }, m.teams.home),
+                                    e('div', { className: 'text-purple-500 text-xs px-2' }, 'VS'),
+                                    e('div', { className: 'font-bold text-lg' }, m.teams.away)
+                                ),
+                                e('div', { className: 'grid grid-cols-3 gap-2 text-center' },
+                                    e('div', { className: 'bg-slate-900 rounded py-1' }, 
+                                        e('div', { className: 'text-[10px] text-gray-500' }, '1'), 
+                                        e('div', { className: 'text-green-400 font-bold' }, m.odds?.home || '-')
+                                    ),
+                                    e('div', { className: 'bg-slate-900 rounded py-1' }, 
+                                        e('div', { className: 'text-[10px] text-gray-500' }, 'X'), 
+                                        e('div', { className: 'text-gray-300 font-bold' }, m.odds?.draw || '-')
+                                    ),
+                                    e('div', { className: 'bg-slate-900 rounded py-1' }, 
+                                        e('div', { className: 'text-[10px] text-gray-500' }, '2'), 
+                                        e('div', { className: 'text-red-400 font-bold' }, m.odds?.away || '-')
                                     )
-                                )
-                            )
-                        ),
-                        
-                        // Stats rápidas
-                        e('div', { className: 'grid md:grid-cols-2 gap-6' },
-                            ['home', 'away'].map(team =>
-                                e('div', {
-                                    key: team,
-                                    className: 'bg-slate-800/50 rounded-xl p-6 border border-purple-500/20'
-                                },
-                                    e('h4', { className: 'text-xl font-bold mb-4' }, analysis.match[team]),
-                                    e('div', { className: 'space-y-3' },
-                                        [
-                                            { label: '⚽ Goles/partido', value: analysis.statistics[team].avg_goals_scored },
-                                            { label: '🛡️ Goles recibidos', value: analysis.statistics[team].avg_goals_conceded },
-                                            { label: '🚩 Corners/partido', value: analysis.statistics[team].avg_corners },
-                                            { label: '🟨 Tarjetas/partido', value: analysis.statistics[team].avg_yellow_cards },
-                                            { label: '📊 Win rate', value: `${analysis.statistics[team].win_rate}%` },
-                                            { label: '🎯 xG', value: analysis.statistics[team].xg }
-                                        ].map((stat, i) =>
-                                            e('div', {
-                                                key: i,
-                                                className: 'flex justify-between items-center'
-                                            },
-                                                e('span', { className: 'text-gray-400' }, stat.label),
-                                                e('span', { className: 'font-bold text-purple-400' }, stat.value)
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    ),
-                    
-                    activeTab === 'predictions' && e('div', { className: 'space-y-6' },
-                        // Goles
-                        e('div', { className: 'bg-slate-800/50 rounded-xl p-6 border border-purple-500/20' },
-                            e('h3', { className: 'text-2xl font-bold mb-4' }, '⚽ Mercado de Goles'),
-                            e('div', { className: 'grid md:grid-cols-2 gap-4' },
-                                [
-                                    { name: 'Over 2.5', prob: analysis.predictions.goals.over_25, rec: analysis.predictions.goals.over_25 > 65 },
-                                    { name: 'Ambos anotan', prob: analysis.predictions.goals.btts, rec: analysis.predictions.goals.btts > 60 }
-                                ].map((market, i) =>
-                                    e('div', {
-                                        key: i,
-                                        className: `bg-slate-700/30 rounded-lg p-4 ${market.rec ? 'border-2 border-green-500' : ''}`
-                                    },
-                                        e('div', { className: 'flex justify-between items-center mb-2' },
-                                            e('span', { className: 'font-semibold' }, market.name),
-                                            market.rec && e('span', { className: 'text-xs bg-green-600 px-2 py-1 rounded' }, '✅ Recomendado')
-                                        ),
-                                        e('div', { className: 'text-3xl font-bold text-purple-400' }, market.prob, '%')
-                                    )
-                                )
-                            )
-                        ),
-                        
-                        // Corners
-                        e('div', { className: 'bg-slate-800/50 rounded-xl p-6 border border-purple-500/20' },
-                            e('h3', { className: 'text-2xl font-bold mb-4' }, '🚩 Mercado de Corners'),
-                            e('div', { className: 'grid grid-cols-3 gap-4' },
-                                [
-                                    { name: 'Over 8.5', prob: analysis.predictions.corners.over_85 },
-                                    { name: 'Over 9.5', prob: analysis.predictions.corners.over_95 },
-                                    { name: 'Total esperado', prob: analysis.predictions.corners.expected_total }
-                                ].map((market, i) =>
-                                    e('div', {
-                                        key: i,
-                                        className: 'bg-slate-700/30 rounded-lg p-4 text-center'
-                                    },
-                                        e('div', { className: 'text-sm text-gray-400 mb-2' }, market.name),
-                                        e('div', { className: 'text-2xl font-bold text-yellow-400' }, 
-                                            i === 2 ? market.prob : `${market.prob}%`
-                                        )
-                                    )
-                                )
+                                ),
+                                e('div', { className: 'mt-3 text-center text-xs text-purple-400 font-medium opacity-0 group-hover:opacity-100 transition' }, 'Ver análisis completo →')
                             )
                         )
                     )
-                )
             );
-        }
-        
-        ReactDOM.createRoot(document.getElementById('root')).render(e(MatchAnalysis));
+        };
+
+        const Chatbot = ({ matchDetails }) => {
+            const [open, setOpen] = useState(false);
+            const [input, setInput] = useState('');
+            const [messages, setMessages] = useState([{ role: 'assistant', content: '👋 Hola, soy BetBrain. Pregúntame sobre cualquier partido.' }]);
+            const [loading, setLoading] = useState(false);
+            const msgsEnd = useRef(null);
+
+            useEffect(() => {
+                if (matchDetails) {
+                    setMessages(prev => [...prev, { 
+                        role: 'assistant', 
+                        content: `📊 He analizado el ${matchDetails.match.home} vs ${matchDetails.match.away}. La IA predice un ${(matchDetails.predictions.result_1x2.home_win)}% para local. ¿Quieres detalles?` 
+                    }]);
+                    setOpen(true);
+                }
+            }, [matchDetails]);
+
+            useEffect(() => msgsEnd.current?.scrollIntoView({ behavior: 'smooth' }), [messages]);
+
+            const send = async () => {
+                if (!input.trim()) return;
+                const newMsgs = [...messages, { role: 'user', content: input }];
+                setMessages(newMsgs);
+                setInput('');
+                setLoading(true);
+
+                try {
+                    const res = await fetch(`${API_BASE}/api/chatbot`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            message: input, 
+                            history: newMsgs,
+                            match_details: matchDetails // Enviamos el contexto del partido actual
+                        })
+                    });
+                    const data = await res.json();
+                    setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+                } catch (e) {
+                    setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Error de conexión.' }]);
+                }
+                setLoading(false);
+            };
+
+            return e('div', { className: 'fixed bottom-4 right-4 z-50 flex flex-col items-end' },
+                open && e('div', { className: 'mb-4 w-80 md:w-96 bg-slate-800 rounded-2xl shadow-2xl border border-purple-500/50 flex flex-col overflow-hidden h-[500px] animate-enter' },
+                    e('div', { className: 'bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center' },
+                        e('div', { className: 'flex items-center gap-2' },
+                            e('span', { className: 'text-2xl' }, '🤖'),
+                            e('div', {},
+                                e('div', { className: 'font-bold' }, 'BetBrain IA'),
+                                e('div', { className: 'text-xs text-green-400 flex items-center gap-1' }, e('span', { className: 'w-2 h-2 bg-green-500 rounded-full animate-pulse' }), 'Online')
+                            )
+                        ),
+                        e('button', { onClick: () => setOpen(false), className: 'text-gray-400 hover:text-white' }, '✕')
+                    ),
+                    e('div', { className: 'flex-1 overflow-y-auto p-4 space-y-4' },
+                        messages.map((m, i) => 
+                            e('div', { key: i, className: `flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}` },
+                                e('div', { className: `max-w-[85%] p-3 rounded-2xl text-sm ${m.role === 'user' ? 'bg-purple-600 text-white rounded-br-none' : 'bg-slate-700 text-gray-200 rounded-bl-none'}` }, m.content)
+                            )
+                        ),
+                        loading && e('div', { className: 'flex gap-1 pl-4' }, [1,2,3].map(i => e('div', { key: i, className: 'w-2 h-2 bg-purple-500 rounded-full animate-bounce', style: { animationDelay: `${i*0.1}s` } }))),
+                        e('div', { ref: msgsEnd })
+                    ),
+                    e('div', { className: 'p-3 bg-slate-900 border-t border-slate-700 flex gap-2' },
+                        e('input', {
+                            value: input,
+                            onChange: e => setInput(e.target.value),
+                            onKeyDown: e => e.key === 'Enter' && send(),
+                            placeholder: 'Escribe tu pregunta...',
+                            className: 'flex-1 bg-slate-800 rounded-xl px-4 py-2 text-sm outline-none focus:ring-1 ring-purple-500 transition'
+                        }),
+                        e('button', { onClick: send, className: 'bg-purple-600 p-2 rounded-xl hover:bg-purple-500 transition' }, '➤')
+                    )
+                ),
+                !open && e('button', {
+                    onClick: () => setOpen(true),
+                    className: 'w-16 h-16 bg-gradient-to-tr from-purple-600 to-pink-600 rounded-full shadow-lg flex items-center justify-center text-3xl hover:scale-110 transition border-4 border-slate-900'
+                }, '🤖')
+            );
+        };
+
+        const App = () => {
+            const [view, setView] = useState('home'); // 'home' or matchId
+            const [currentMatchDetails, setCurrentMatchDetails] = useState(null);
+
+            return e('div', { className: 'min-h-screen bg-[#0f172a]' },
+                view === 'home' 
+                    ? e(MatchList, { onSelectMatch: (id) => setView(id) })
+                    : e(MatchDetail, { 
+                        matchId: view, 
+                        onBack: () => { setView('home'); setCurrentMatchDetails(null); },
+                        onUpdateContext: (details) => setCurrentMatchDetails(details)
+                      }),
+                e(Chatbot, { matchDetails: currentMatchDetails })
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(e(App));
     </script>
 </body>
 </html>
