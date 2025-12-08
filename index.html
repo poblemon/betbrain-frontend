@@ -3,372 +3,254 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BetBrain IA - Chatbot Experto</title>
+    <title>Análisis Completo - BetBrain IA</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @keyframes slideIn {
-            from { transform: translateY(100%); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        .chat-bubble { animation: slideIn 0.3s ease-out; }
-    </style>
 </head>
-<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
     <div id="root"></div>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
     <script>
-        const { useState, useEffect, useRef, createElement: e } = React;
+        const { useState, useEffect, createElement: e } = React;
         const API = 'https://betbrain-backend.onrender.com/api';
         
-        function ChatBot({ matches }) {
-            const [open, setOpen] = useState(false);
-            const [messages, setMessages] = useState([
-                { role: 'assistant', content: '¡Hola! 👋 Soy tu asistente BetBrain IA. ¿En qué puedo ayudarte hoy?' }
-            ]);
-            const [input, setInput] = useState('');
-            const [loading, setLoading] = useState(false);
-            const messagesEnd = useRef(null);
-            
-            useEffect(() => {
-                messagesEnd.current?.scrollIntoView({ behavior: 'smooth' });
-            }, [messages]);
-            
-            async function sendMessage() {
-                if (!input.trim()) return;
-                
-                const userMsg = { role: 'user', content: input };
-                setMessages(prev => [...prev, userMsg]);
-                const currentInput = input.trim().toLowerCase();
-                setInput('');
-                setLoading(true);
-                
-                // Análisis inteligente local mientras arreglamos Groq
-                let response = '';
-                
-                try {
-                    // Buscar equipo mencionado
-                    const teamMentioned = matches.find(m => 
-                        currentInput.includes(m.home.toLowerCase()) || 
-                        currentInput.includes(m.away.toLowerCase())
-                    );
-                    
-                    if (currentInput.includes('mejor') || currentInput.includes('recomiend')) {
-                        // Encontrar el mejor pick
-                        const bestMatch = matches.reduce((best, m) => {
-                            const homeEdge = ((m.probs.home / ((1/m.odds.home)*100)) - 1) * 100;
-                            const bestEdge = best ? ((best.probs.home / ((1/best.odds.home)*100)) - 1) * 100 : 0;
-                            return homeEdge > bestEdge ? m : best;
-                        }, null);
-                        
-                        if (bestMatch) {
-                            const homeEdge = ((bestMatch.probs.home / ((1/bestMatch.odds.home)*100)) - 1) * 100;
-                            response = `🎯 **MEJOR PICK DE HOY**\n\n⚽ **${bestMatch.home} vs ${bestMatch.away}**\n${bestMatch.time} - ${bestMatch.date}\n\n💰 **Recomendación:** Victoria ${bestMatch.home}\n📊 Cuota: ${bestMatch.odds.home}\n✅ Probabilidad: ${bestMatch.probs.home.toFixed(0)}%\n📈 Ventaja: +${homeEdge.toFixed(1)}%\n\n💡 **Razón:** Este partido ofrece el mejor value según mi análisis. xG favorable (${bestMatch.probs.xGHome} vs ${bestMatch.probs.xGAway}) y cuota atractiva.`;
-                        }
-                    }
-                    else if (currentInput.includes('ganar') && currentInput.match(/\d+/)) {
-                        // Calcular combinada para ganar X
-                        const amount = parseInt(currentInput.match(/\d+/)[0]);
-                        const topPicks = matches.slice(0, 3);
-                        const totalOdds = topPicks.reduce((acc, m) => acc * m.odds.home, 1);
-                        const stake = (amount / totalOdds).toFixed(2);
-                        
-                        response = `💰 **COMBINADA PARA GANAR €${amount}**\n\n🎯 Apuesta necesaria: €${stake}\n📊 Cuota total: ${totalOdds.toFixed(2)}\n\n**Picks seleccionados:**\n${topPicks.map((m, i) => `${i+1}. ${m.home} vs ${m.away} - Victoria Local (${m.odds.home})`).join('\n')}\n\n⚠️ Riesgo: Medio\n✅ Probabilidad combinada: ${(topPicks.reduce((acc, m) => acc * (m.probs.home/100), 1) * 100).toFixed(0)}%`;
-                    }
-                    else if (teamMentioned) {
-                        // Análisis específico del equipo
-                        const isHome = currentInput.includes(teamMentioned.home.toLowerCase());
-                        const team = isHome ? teamMentioned.home : teamMentioned.away;
-                        const odds = isHome ? teamMentioned.odds.home : teamMentioned.odds.away;
-                        const prob = isHome ? teamMentioned.probs.home : teamMentioned.probs.away;
-                        const xG = isHome ? teamMentioned.probs.xGHome : teamMentioned.probs.xGAway;
-                        
-                        const verdict = prob > 55 ? '✅ Sí, tiene buenas chances' : prob > 40 ? '⚠️ Es posible, pero arriesgado' : '❌ No es probable';
-                        
-                        response = `⚽ **ANÁLISIS: ${team}**\n\n${verdict}\n\n📊 **Estadísticas:**\n• Probabilidad de ganar: ${prob.toFixed(0)}%\n• Cuota: ${odds}\n• xG esperado: ${xG}\n• Over 2.5: ${teamMentioned.probs.over25}%\n• BTTS: ${teamMentioned.probs.btts}%\n\n💡 ${prob > 55 ? 'Recomiendo apostar a su victoria' : prob > 40 ? 'Considera apostarlo en combinada' : 'No lo recomiendo como apuesta individual'}`;
-                    }
-                    else if (currentInput.includes('combinada')) {
-                        const safePicks = matches.filter(m => m.probs.home > 60).slice(0, 3);
-                        const totalOdds = safePicks.reduce((acc, m) => acc * m.odds.home, 1);
-                        
-                        response = `🎯 **COMBINADA SEGURA**\n\n📊 Cuota total: ${totalOdds.toFixed(2)}\n✅ Probabilidad: ${(safePicks.reduce((acc, m) => acc * (m.probs.home/100), 1) * 100).toFixed(0)}%\n\n**Selección:**\n${safePicks.map((m, i) => `${i+1}. ${m.home} vs ${m.away}\n   Victoria ${m.home} (${m.odds.home})\n   Prob: ${m.probs.home.toFixed(0)}%`).join('\n\n')}\n\n💰 Con €10 ganarías: €${(10 * totalOdds).toFixed(2)}`;
-                    }
-                    else if (currentInput.includes('hola') || currentInput.includes('buenos')) {
-                        response = `¡Hola! 👋 Soy tu asistente BetBrain IA.\n\nTengo ${matches.length} partidos analizados para ti.\n\n¿Qué te gustaría saber?\n• "Dame el mejor pick"\n• "¿Ganará [equipo]?"\n• "Quiero ganar €100"\n• "Hazme una combinada"`;
-                    }
-                    else {
-                        response = `Entiendo que quieres información sobre apuestas.\n\nActualmente tengo ${matches.length} partidos disponibles.\n\n¿Podrías ser más específico?\nEjemplo:\n• "¿Ganará el Liverpool?"\n• "Dame el mejor pick"\n• "Hazme una combinada segura"`;
-                    }
-                    
-                    // Si no hay respuesta, intentar con Groq
-                    if (!response) {
-                        const enrichedMatches = matches.map(m => ({
-                            home: m.home,
-                            away: m.away,
-                            time: m.time,
-                            odds: m.odds,
-                            xGHome: m.probs?.xGHome,
-                            xGAway: m.probs?.xGAway,
-                            over25: m.probs?.over25,
-                            btts: m.probs?.btts,
-                            homeProb: m.probs?.home?.toFixed(1),
-                            awayProb: m.probs?.away?.toFixed(1)
-                        }));
-                        
-                        const res = await fetch(`${API}/chatbot`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ 
-                                message: currentInput,
-                                history: messages,
-                                matches: enrichedMatches
-                            })
-                        });
-                        
-                        if (res.ok) {
-                            const data = await res.json();
-                            response = data.response;
-                        }
-                    }
-                    
-                    setMessages(prev => [...prev, { 
-                        role: 'assistant', 
-                        content: response
-                    }]);
-                    
-                } catch (err) {
-                    console.error('Chatbot error:', err);
-                    setMessages(prev => [...prev, { 
-                        role: 'assistant', 
-                        content: `📊 Tengo ${matches.length} partidos analizados.\n\n¿Qué necesitas?\n• Pregunta por un equipo específico\n• "Dame el mejor pick"\n• "Quiero ganar €X"` 
-                    }]);
+        // Simular datos (en producción vendrían del backend)
+        const mockAnalysis = {
+            match: {
+                home: "Barcelona",
+                away: "Osasuna",
+                date: "2024-12-08 15:00",
+                venue: "Camp Nou, Barcelona",
+                referee: "José María Sánchez",
+                competition: "LaLiga"
+            },
+            statistics: {
+                home: {
+                    avg_goals_scored: 2.4,
+                    avg_goals_conceded: 0.8,
+                    avg_corners: 7.2,
+                    avg_yellow_cards: 2.1,
+                    form: ["W", "W", "W", "D", "W"],
+                    win_rate: 75,
+                    over_25_percentage: 70,
+                    btts_percentage: 45,
+                    clean_sheet_rate: 55,
+                    xg: 2.5,
+                    xga: 0.9
+                },
+                away: {
+                    avg_goals_scored: 1.2,
+                    avg_goals_conceded: 1.8,
+                    avg_corners: 4.5,
+                    avg_yellow_cards: 2.8,
+                    form: ["L", "D", "L", "W", "L"],
+                    win_rate: 30,
+                    over_25_percentage: 55,
+                    btts_percentage: 60,
+                    clean_sheet_rate: 20,
+                    xg: 1.3,
+                    xga: 1.9
                 }
-                setLoading(false);
+            },
+            predictions: {
+                result_1x2: { home_win: 72, draw: 18, away_win: 10 },
+                goals: {
+                    expected_home: 2.2,
+                    expected_away: 0.9,
+                    over_25: 68,
+                    btts: 48
+                },
+                corners: { expected_total: 10.5, over_85: 75, over_95: 65 },
+                cards: { expected_yellow: 4.5, over_35_cards: 70 }
             }
+        };
+        
+        function MatchAnalysis() {
+            const [activeTab, setActiveTab] = useState('overview');
+            const [analysis, setAnalysis] = useState(mockAnalysis);
             
-            function quickAction(action) {
-                setInput(action);
-                setTimeout(() => sendMessage(), 100);
-            }
+            const tabs = [
+                { id: 'overview', name: '📊 General', icon: '📊' },
+                { id: 'stats', name: '📈 Estadísticas', icon: '📈' },
+                { id: 'corners', name: '🚩 Corners', icon: '🚩' },
+                { id: 'cards', name: '🟨 Tarjetas', icon: '🟨' },
+                { id: 'players', name: '⚽ Jugadores', icon: '⚽' },
+                { id: 'predictions', name: '🎯 Predicciones', icon: '🎯' }
+            ];
             
-            return e('div', { className: 'fixed bottom-6 right-6 z-50' },
-                // Botón flotante
-                !open && e('button', {
-                    onClick: () => setOpen(true),
-                    className: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full w-16 h-16 shadow-2xl hover:scale-110 transition flex items-center justify-center text-2xl'
-                }, '🤖'),
-                
-                // Ventana de chat
-                open && e('div', { className: 'bg-slate-800 rounded-2xl shadow-2xl w-96 h-[600px] flex flex-col border border-purple-500/30' },
+            return e('div', { className: 'min-h-screen p-6' },
+                e('div', { className: 'max-w-7xl mx-auto' },
                     // Header
-                    e('div', { className: 'bg-gradient-to-r from-purple-600 to-pink-600 p-4 rounded-t-2xl flex justify-between items-center' },
-                        e('div', { className: 'flex items-center gap-3' },
-                            e('div', { className: 'text-2xl' }, '🤖'),
+                    e('div', { className: 'bg-slate-800/50 rounded-2xl p-6 mb-6 border border-purple-500/30' },
+                        e('div', { className: 'flex items-center justify-between mb-4' },
+                            e('button', {
+                                onClick: () => window.history.back(),
+                                className: 'text-purple-400 hover:text-purple-300'
+                            }, '← Volver'),
+                            e('div', { className: 'text-sm text-gray-400' }, analysis.match.competition)
+                        ),
+                        e('div', { className: 'grid md:grid-cols-3 gap-4 items-center text-center' },
                             e('div', {},
-                                e('div', { className: 'font-bold' }, 'BetBrain IA'),
-                                e('div', { className: 'text-xs opacity-80' }, 'Asistente experto')
-                            )
-                        ),
-                        e('button', {
-                            onClick: () => setOpen(false),
-                            className: 'text-white/80 hover:text-white text-2xl'
-                        }, '×')
-                    ),
-                    
-                    // Mensajes
-                    e('div', { className: 'flex-1 overflow-y-auto p-4 space-y-4' },
-                        messages.map((msg, i) =>
-                            e('div', {
-                                key: i,
-                                className: `chat-bubble flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`
-                            },
-                                e('div', {
-                                    className: `max-w-[80%] rounded-2xl px-4 py-3 ${
-                                        msg.role === 'user' 
-                                            ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' 
-                                            : 'bg-slate-700 text-gray-100'
-                                    }`
-                                }, msg.content)
-                            )
-                        ),
-                        loading && e('div', { className: 'flex justify-start' },
-                            e('div', { className: 'bg-slate-700 rounded-2xl px-4 py-3' },
-                                e('div', { className: 'flex gap-1' },
-                                    [1,2,3].map(i => e('div', {
-                                        key: i,
-                                        className: 'w-2 h-2 bg-purple-400 rounded-full animate-bounce',
-                                        style: { animationDelay: `${i * 0.1}s` }
-                                    }))
+                                e('div', { className: 'text-3xl font-bold mb-2' }, analysis.match.home),
+                                e('div', { className: 'flex justify-center gap-1' },
+                                    analysis.statistics.home.form.map((r, i) =>
+                                        e('span', {
+                                            key: i,
+                                            className: `w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
+                                                r === 'W' ? 'bg-green-600' : r === 'D' ? 'bg-yellow-600' : 'bg-red-600'
+                                            }`
+                                        }, r)
+                                    )
+                                )
+                            ),
+                            e('div', { className: 'text-4xl font-bold text-purple-400' }, 'VS'),
+                            e('div', {},
+                                e('div', { className: 'text-3xl font-bold mb-2' }, analysis.match.away),
+                                e('div', { className: 'flex justify-center gap-1' },
+                                    analysis.statistics.away.form.map((r, i) =>
+                                        e('span', {
+                                            key: i,
+                                            className: `w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
+                                                r === 'W' ? 'bg-green-600' : r === 'D' ? 'bg-yellow-600' : 'bg-red-600'
+                                            }`
+                                        }, r)
+                                    )
                                 )
                             )
                         ),
-                        e('div', { ref: messagesEnd })
-                    ),
-                    
-                    // Acciones rápidas
-                    messages.length <= 1 && e('div', { className: 'px-4 pb-2 flex flex-wrap gap-2' },
-                        ['Dame los mejores picks', 'Quiero ganar €100', 'Crea una combinada'].map(action =>
-                            e('button', {
-                                key: action,
-                                onClick: () => quickAction(action),
-                                className: 'text-xs bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-full transition'
-                            }, action)
+                        e('div', { className: 'mt-6 grid grid-cols-2 gap-4 text-sm text-gray-300' },
+                            e('div', {}, '📅 ', analysis.match.date),
+                            e('div', {}, '🏟️ ', analysis.match.venue),
+                            e('div', {}, '👨‍⚖️ ', analysis.match.referee),
+                            e('div', {}, '🏆 ', analysis.match.competition)
                         )
                     ),
                     
-                    // Input
-                    e('div', { className: 'p-4 border-t border-slate-700' },
-                        e('div', { className: 'flex gap-2' },
-                            e('input', {
-                                type: 'text',
-                                value: input,
-                                onChange: ev => setInput(ev.target.value),
-                                onKeyPress: ev => ev.key === 'Enter' && sendMessage(),
-                                placeholder: 'Escribe tu pregunta...',
-                                className: 'flex-1 bg-slate-700 rounded-full px-4 py-2 outline-none focus:ring-2 focus:ring-purple-500 text-white placeholder-gray-400'
-                            }),
+                    // Tabs
+                    e('div', { className: 'flex gap-2 mb-6 overflow-x-auto' },
+                        tabs.map(tab =>
                             e('button', {
-                                onClick: sendMessage,
-                                disabled: !input.trim(),
-                                className: 'bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full w-10 h-10 flex items-center justify-center disabled:opacity-50 hover:scale-105 transition'
-                            }, '➤')
+                                key: tab.id,
+                                onClick: () => setActiveTab(tab.id),
+                                className: `px-6 py-3 rounded-xl font-medium transition whitespace-nowrap ${
+                                    activeTab === tab.id
+                                        ? 'bg-gradient-to-r from-purple-600 to-pink-600'
+                                        : 'bg-slate-800/50 hover:bg-slate-700/50'
+                                }`
+                            }, tab.icon, ' ', tab.name)
+                        )
+                    ),
+                    
+                    // Content
+                    activeTab === 'overview' && e('div', { className: 'space-y-6' },
+                        // Probabilidades principales
+                        e('div', { className: 'bg-slate-800/50 rounded-xl p-6 border border-purple-500/20' },
+                            e('h3', { className: 'text-2xl font-bold mb-4' }, '🎯 Resultado Probable'),
+                            e('div', { className: 'grid grid-cols-3 gap-4' },
+                                [
+                                    { label: analysis.match.home, prob: analysis.predictions.result_1x2.home_win, color: 'green' },
+                                    { label: 'Empate', prob: analysis.predictions.result_1x2.draw, color: 'yellow' },
+                                    { label: analysis.match.away, prob: analysis.predictions.result_1x2.away_win, color: 'blue' }
+                                ].map((item, i) =>
+                                    e('div', {
+                                        key: i,
+                                        className: 'bg-slate-700/30 rounded-xl p-4 text-center'
+                                    },
+                                        e('div', { className: 'text-sm text-gray-400 mb-2' }, item.label),
+                                        e('div', { className: `text-4xl font-bold text-${item.color}-400` }, item.prob, '%'),
+                                        e('div', { className: 'w-full bg-slate-600 rounded-full h-2 mt-3' },
+                                            e('div', {
+                                                className: `bg-${item.color}-500 h-2 rounded-full transition-all`,
+                                                style: { width: `${item.prob}%` }
+                                            })
+                                        )
+                                    )
+                                )
+                            )
+                        ),
+                        
+                        // Stats rápidas
+                        e('div', { className: 'grid md:grid-cols-2 gap-6' },
+                            ['home', 'away'].map(team =>
+                                e('div', {
+                                    key: team,
+                                    className: 'bg-slate-800/50 rounded-xl p-6 border border-purple-500/20'
+                                },
+                                    e('h4', { className: 'text-xl font-bold mb-4' }, analysis.match[team]),
+                                    e('div', { className: 'space-y-3' },
+                                        [
+                                            { label: '⚽ Goles/partido', value: analysis.statistics[team].avg_goals_scored },
+                                            { label: '🛡️ Goles recibidos', value: analysis.statistics[team].avg_goals_conceded },
+                                            { label: '🚩 Corners/partido', value: analysis.statistics[team].avg_corners },
+                                            { label: '🟨 Tarjetas/partido', value: analysis.statistics[team].avg_yellow_cards },
+                                            { label: '📊 Win rate', value: `${analysis.statistics[team].win_rate}%` },
+                                            { label: '🎯 xG', value: analysis.statistics[team].xg }
+                                        ].map((stat, i) =>
+                                            e('div', {
+                                                key: i,
+                                                className: 'flex justify-between items-center'
+                                            },
+                                                e('span', { className: 'text-gray-400' }, stat.label),
+                                                e('span', { className: 'font-bold text-purple-400' }, stat.value)
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    
+                    activeTab === 'predictions' && e('div', { className: 'space-y-6' },
+                        // Goles
+                        e('div', { className: 'bg-slate-800/50 rounded-xl p-6 border border-purple-500/20' },
+                            e('h3', { className: 'text-2xl font-bold mb-4' }, '⚽ Mercado de Goles'),
+                            e('div', { className: 'grid md:grid-cols-2 gap-4' },
+                                [
+                                    { name: 'Over 2.5', prob: analysis.predictions.goals.over_25, rec: analysis.predictions.goals.over_25 > 65 },
+                                    { name: 'Ambos anotan', prob: analysis.predictions.goals.btts, rec: analysis.predictions.goals.btts > 60 }
+                                ].map((market, i) =>
+                                    e('div', {
+                                        key: i,
+                                        className: `bg-slate-700/30 rounded-lg p-4 ${market.rec ? 'border-2 border-green-500' : ''}`
+                                    },
+                                        e('div', { className: 'flex justify-between items-center mb-2' },
+                                            e('span', { className: 'font-semibold' }, market.name),
+                                            market.rec && e('span', { className: 'text-xs bg-green-600 px-2 py-1 rounded' }, '✅ Recomendado')
+                                        ),
+                                        e('div', { className: 'text-3xl font-bold text-purple-400' }, market.prob, '%')
+                                    )
+                                )
+                            )
+                        ),
+                        
+                        // Corners
+                        e('div', { className: 'bg-slate-800/50 rounded-xl p-6 border border-purple-500/20' },
+                            e('h3', { className: 'text-2xl font-bold mb-4' }, '🚩 Mercado de Corners'),
+                            e('div', { className: 'grid grid-cols-3 gap-4' },
+                                [
+                                    { name: 'Over 8.5', prob: analysis.predictions.corners.over_85 },
+                                    { name: 'Over 9.5', prob: analysis.predictions.corners.over_95 },
+                                    { name: 'Total esperado', prob: analysis.predictions.corners.expected_total }
+                                ].map((market, i) =>
+                                    e('div', {
+                                        key: i,
+                                        className: 'bg-slate-700/30 rounded-lg p-4 text-center'
+                                    },
+                                        e('div', { className: 'text-sm text-gray-400 mb-2' }, market.name),
+                                        e('div', { className: 'text-2xl font-bold text-yellow-400' }, 
+                                            i === 2 ? market.prob : `${market.prob}%`
+                                        )
+                                    )
+                                )
+                            )
                         )
                     )
                 )
             );
         }
         
-        function App() {
-            const [leagues] = useState([
-                { id: 2021, name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
-                { id: 2014, name: 'LaLiga', flag: '🇪🇸' },
-                { id: 2019, name: 'Serie A', flag: '🇮🇹' },
-                { id: 2002, name: 'Bundesliga', flag: '🇩🇪' }
-            ]);
-            const [selected, setSelected] = useState(null);
-            const [matches, setMatches] = useState([]);
-            const [loading, setLoading] = useState(false);
-            
-            async function loadMatches(league) {
-                setLoading(true);
-                setSelected(league);
-                try {
-                    const [matchRes, standRes] = await Promise.all([
-                        fetch(`${API}/matches/${league.id}`),
-                        fetch(`${API}/standings/${league.id}`)
-                    ]);
-                    const matchData = await matchRes.json();
-                    const standData = await standRes.json();
-                    const standings = standData.standings?.[0]?.table || [];
-                    
-                    const processed = (matchData.matches || []).slice(0, 10).map(m => {
-                        const homeTeam = standings.find(t => t.team.id === m.homeTeam.id);
-                        const awayTeam = standings.find(t => t.team.id === m.awayTeam.id);
-                        
-                        // Calcular probabilidades
-                        const homeFormScore = homeTeam?.form?.split(',').filter(r => r === 'W').length / 5 || 0.5;
-                        const awayFormScore = awayTeam?.form?.split(',').filter(r => r === 'W').length / 5 || 0.5;
-                        const homeGoalsAvg = homeTeam ? homeTeam.goalsFor / homeTeam.playedGames : 1.5;
-                        const awayGoalsAvg = awayTeam ? awayTeam.goalsFor / awayTeam.playedGames : 1.5;
-                        
-                        const xGHome = (homeGoalsAvg * 1.2).toFixed(2);
-                        const xGAway = (awayGoalsAvg * 0.9).toFixed(2);
-                        const totalXG = parseFloat(xGHome) + parseFloat(xGAway);
-                        
-                        const homeWinProb = (homeFormScore * 0.4 + (homeGoalsAvg / (homeGoalsAvg + awayGoalsAvg)) * 0.6) * 100;
-                        const awayWinProb = (awayFormScore * 0.4 + (awayGoalsAvg / (homeGoalsAvg + awayGoalsAvg)) * 0.6) * 100;
-                        
-                        return {
-                            id: m.id,
-                            home: m.homeTeam.shortName || m.homeTeam.name,
-                            away: m.awayTeam.shortName || m.awayTeam.name,
-                            time: new Date(m.utcDate).toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'}),
-                            date: new Date(m.utcDate).toLocaleDateString('es'),
-                            odds: m.odds || {home:2.1,draw:3.4,away:3.5},
-                            probs: {
-                                home: homeWinProb,
-                                away: awayWinProb,
-                                xGHome,
-                                xGAway,
-                                over25: Math.round(totalXG > 2.5 ? 65 + (totalXG - 2.5) * 10 : 45),
-                                btts: Math.round(parseFloat(xGHome) > 0.8 && parseFloat(xGAway) > 0.8 ? 65 : 40)
-                            }
-                        };
-                    });
-                    setMatches(processed);
-                } catch(err) {
-                    console.error(err);
-                } finally {
-                    setLoading(false);
-                }
-            }
-            
-            return e('div', { className: 'min-h-screen text-white p-6' },
-                e('div', { className: 'max-w-7xl mx-auto' },
-                    // Header
-                    e('div', { className: 'text-center mb-8' },
-                        e('h1', { className: 'text-5xl font-bold mb-2' }, '⚽ BetBrain IA'),
-                        e('p', { className: 'text-gray-300' }, 'Asistente IA para análisis de apuestas'),
-                        e('div', { className: 'mt-3 flex items-center justify-center gap-2 text-sm' },
-                            e('span', { className: 'bg-green-600/20 text-green-400 px-3 py-1 rounded-full' }, '🤖 Chatbot IA activo'),
-                            e('span', { className: 'bg-purple-600/20 text-purple-400 px-3 py-1 rounded-full' }, '📊 Análisis en tiempo real')
-                        )
-                    ),
-                    
-                    // Ligas
-                    e('div', { className: 'grid grid-cols-2 md:grid-cols-4 gap-4 mb-8' },
-                        leagues.map(l => 
-                            e('button', {
-                                key: l.id,
-                                onClick: () => loadMatches(l),
-                                className: `p-4 rounded-xl transition ${selected?.id === l.id ? 'bg-gradient-to-r from-purple-600 to-pink-600 scale-105' : 'bg-slate-800/50 hover:bg-slate-700/50'}`
-                            }, e('div', { className: 'text-3xl mb-2' }, l.flag), e('div', { className: 'text-sm' }, l.name))
-                        )
-                    ),
-                    
-                    // Partidos
-                    loading ? e('div', { className: 'text-center py-20' },
-                        e('div', { className: 'text-6xl mb-4' }, '⚽'),
-                        e('div', { className: 'text-xl text-purple-400' }, 'Cargando partidos...')
-                    ) :
-                    matches.length === 0 ? e('div', { className: 'text-center py-20' },
-                        e('div', { className: 'text-6xl mb-4' }, '🎯'),
-                        e('div', { className: 'text-xl text-gray-400' }, 'Selecciona una liga'),
-                        e('div', { className: 'mt-4 text-purple-400' }, '💬 O pregúntale al chatbot →')
-                    ) :
-                    e('div', { className: 'grid md:grid-cols-2 lg:grid-cols-3 gap-4' },
-                        matches.map(m =>
-                            e('div', {
-                                key: m.id,
-                                className: 'bg-slate-800/50 rounded-xl p-5 border border-purple-500/20 hover:border-purple-500/50 transition'
-                            },
-                                e('div', { className: 'text-purple-400 text-sm mb-3' }, m.time),
-                                e('div', { className: 'grid grid-cols-3 gap-2 text-center' },
-                                    e('div', {},
-                                        e('div', { className: 'font-bold mb-1' }, m.home),
-                                        e('div', { className: 'text-green-400 text-xl font-bold' }, m.odds.home)
-                                    ),
-                                    e('div', { className: 'text-gray-400' },
-                                        e('div', { className: 'text-sm mb-1' }, 'Empate'),
-                                        e('div', { className: 'text-lg font-bold' }, m.odds.draw)
-                                    ),
-                                    e('div', {},
-                                        e('div', { className: 'font-bold mb-1' }, m.away),
-                                        e('div', { className: 'text-green-400 text-xl font-bold' }, m.odds.away)
-                                    )
-                                )
-                            )
-                        )
-                    )
-                ),
-                
-                // Chatbot
-                e(ChatBot, { matches })
-            );
-        }
-        
-        ReactDOM.createRoot(document.getElementById('root')).render(e(App));
+        ReactDOM.createRoot(document.getElementById('root')).render(e(MatchAnalysis));
     </script>
 </body>
 </html>
